@@ -2,9 +2,9 @@
 
 将“每页都是图片”的 PPTX、单张幻灯片截图，或一组幻灯片图片，重建为保留原始视觉效果且文字可编辑的 PPTX。
 
-## 适用场景
+## 什么时候使用
 
-使用本 skill，当用户提出以下需求时：
+当用户提出以下需求时，使用本 skill：
 
 - 将图片版 PPTX 转换成可编辑 PPTX
 - 将幻灯片截图转换成可编辑 PPTX
@@ -13,13 +13,124 @@
 - 批量处理多页图片并合并成一个 PPTX
 - 替换、追加、合并已经生成的 PPTX 页面
 
-典型用户表述包括：
+典型表述：
 
 - “把这个图片转换成可编辑的 pptx，保持所有图像”
 - “文字识别出来，确保可以编辑”
 - “每页都是图片的 PPTX，逐页 OCR 并重建”
 - “保留原图效果，同时文字可编辑”
 - “将这些生成的 PPTX 合并成一个文件”
+
+## 已提供的可执行脚本
+
+本 skill 包含可直接运行的 Python 脚本：
+
+```text
+.codex/skills/image-slide-ocr-pptx/scripts/image_slide_ocr_pptx.py
+```
+
+依赖文件：
+
+```text
+.codex/skills/image-slide-ocr-pptx/requirements.txt
+```
+
+安装 Python 依赖：
+
+```bash
+pip install -r .codex/skills/image-slide-ocr-pptx/requirements.txt
+```
+
+如果使用脚本内置 OCR，还需要系统安装 Tesseract OCR 以及对应语言包，例如中文简体 `chi_sim` 和英文 `eng`。如果环境没有 Tesseract，优先使用视觉模型或其它 OCR 工具生成 `--ocr-json`，再调用脚本生成 PPTX。
+
+## 脚本能力
+
+`image_slide_ocr_pptx.py` 支持：
+
+- 输入单张图片、多张图片或图片目录
+- 输入图片版 `.pptx`，自动提取每页主图作为底图
+- 可选使用 LibreOffice + pdftoppm 将非纯图片 PPTX 渲染成图片
+- 使用 `pytesseract` 自动 OCR
+- 接收外部 OCR JSON，适合中文复杂页面或视觉模型识别结果
+- 每页插入原图作为全页底图
+- 将 OCR 结果叠加为可编辑文本框
+- 自动设置页面比例、文本框位置、字号、颜色和对齐方式
+- 输出 `.pptx`
+- 生成后重新打开 PPTX，统计每页图片数和文本框数用于质检
+
+## 常用命令
+
+### 1. 图片目录转可编辑 PPTX
+
+```bash
+python .codex/skills/image-slide-ocr-pptx/scripts/image_slide_ocr_pptx.py \
+  ./slides_images \
+  --output ./image_slide_ocr_editable.pptx \
+  --lang chi_sim+eng
+```
+
+### 2. 多张图片转可编辑 PPTX
+
+```bash
+python .codex/skills/image-slide-ocr-pptx/scripts/image_slide_ocr_pptx.py \
+  ./page01.png ./page02.png ./page03.png \
+  --output ./image_slide_ocr_editable.pptx \
+  --lang chi_sim+eng
+```
+
+### 3. 图片版 PPTX 转可编辑 PPTX
+
+```bash
+python .codex/skills/image-slide-ocr-pptx/scripts/image_slide_ocr_pptx.py \
+  ./image_only_slides.pptx \
+  --output ./image_slide_ocr_editable.pptx \
+  --lang chi_sim+eng
+```
+
+### 4. 使用外部 OCR JSON 生成 PPTX
+
+复杂中文、技术汇报、图表页建议先用视觉模型识别页面文字和坐标，保存为 JSON，再调用脚本：
+
+```bash
+python .codex/skills/image-slide-ocr-pptx/scripts/image_slide_ocr_pptx.py \
+  ./slides_images \
+  --ocr-json ./ocr_blocks.json \
+  --output ./image_slide_ocr_editable.pptx
+```
+
+### 5. 只保留图片底图，不做 OCR
+
+```bash
+python .codex/skills/image-slide-ocr-pptx/scripts/image_slide_ocr_pptx.py \
+  ./slides_images \
+  --no-ocr \
+  --output ./image_only_preserved.pptx
+```
+
+## OCR JSON 格式
+
+脚本支持以下 JSON 格式。最外层是页面列表，每页是文字块列表：
+
+```json
+[
+  [
+    {
+      "text": "识别出的文字",
+      "x": 0.1,
+      "y": 0.2,
+      "w": 0.3,
+      "h": 0.05,
+      "font_size": 18,
+      "bold": false,
+      "color": "#000000",
+      "align": "left",
+      "font": "Microsoft YaHei"
+    }
+  ]
+]
+```
+
+坐标 `x/y/w/h` 使用 0 到 1 的归一化比例，分别表示文字框相对于整页图片的左、上、宽、高。
 
 ## 目标输出
 
@@ -33,19 +144,7 @@
 6. 多页输入时，按原始顺序合并为一个 PPTX。
 7. 最终返回可下载的 PPTX 文件路径。
 
-## 推荐工具与库
-
-优先使用 Python 实现：
-
-- `python-pptx`：创建和编辑 PPTX
-- `Pillow`：读取图片尺寸、裁剪、预处理
-- `pytesseract` 或系统 OCR：英文/数字 OCR
-- 可用时优先使用视觉模型能力读取中文、复杂版式和图表文字
-- `opencv-python`：可选，用于图像增强、二值化、检测文本区域
-
-注意：OCR 库通常对中文和复杂版式不稳定。对于中文技术汇报、管理层 PPT、复杂图表页面，应优先使用模型视觉理解结果，再用程序生成文本框。
-
-## 工作流
+## 推荐工作流
 
 ### 1. 读取输入
 
@@ -53,14 +152,14 @@
 
 - 单张图片：`.png`、`.jpg`、`.jpeg`、`.webp`
 - 多张图片
+- 图片目录
 - 图片版 `.pptx`
-- 已生成的多个单页 `.pptx`
 
 若输入是 PPTX：
 
-1. 将每页导出或渲染为图片。
-2. 保留每页原始图像。
-3. 对每页图像执行 OCR 与版面重建。
+1. 优先用脚本提取每页主图。
+2. 如果不是纯图片页，可尝试 LibreOffice + pdftoppm 渲染。
+3. 如果环境无法渲染，先导出 PPTX 为图片，再运行脚本。
 
 若输入是图片：
 
@@ -70,7 +169,7 @@
 
 ### 2. OCR 与版面解析
 
-对每页识别：
+对每页尽量识别：
 
 - 标题
 - 小标题
@@ -81,43 +180,23 @@
 - 页码、角标、备注
 - Logo 附近的固定标识文字
 
-每个文字块至少记录：
-
-```json
-{
-  "text": "识别出的文字",
-  "x": 0.1,
-  "y": 0.2,
-  "w": 0.3,
-  "h": 0.05,
-  "font_size": 18,
-  "bold": false,
-  "color": "#000000",
-  "align": "left"
-}
-```
-
-坐标建议使用归一化比例，最后映射到 PPT 坐标。
+对于中文复杂页面，脚本内置 Tesseract OCR 可能不稳定。更推荐由视觉模型生成 `ocr_blocks.json`，再调用脚本生成 PPTX。
 
 ### 3. 创建 PPTX
 
 1. 创建空白 PPTX。
 2. 根据输入图片比例设置 `slide_width` 和 `slide_height`。
 3. 每页使用 blank layout。
-4. 插入原图作为底图：
-   - `left = 0`
-   - `top = 0`
-   - `width = slide_width`
-   - `height = slide_height`
+4. 插入原图作为底图，覆盖整页。
 5. 对 OCR 得到的每个文字块，创建 textbox。
 6. 设置文本框为透明填充、无边框。
 7. 设置字体、字号、颜色、粗体、对齐方式。
-8. 必要时设置文本框文本自动缩放或微调高度，避免截断。
+8. 必要时微调文本框高度，避免截断。
 
-### 4. 文字层质量要求
+### 4. 质量要求
 
 - 文字必须可选中、可编辑。
-- 不允许只放图片而没有文字层，除非该页确实无文字。
+- 不允许只放图片而没有文字层，除非该页确实无文字或用户指定 `--no-ocr`。
 - 不允许生成大量空文本框。
 - 不允许把整页文字塞进一个巨大文本框。
 - 同一视觉块应尽量对应一个文本框。
@@ -127,37 +206,25 @@
 
 ### 5. 坐标映射
 
-若 OCR 输出像素坐标：
+若 OCR 输出像素坐标，转换为归一化坐标：
 
 ```python
-ppt_x = px_x / image_width * slide_width
-ppt_y = px_y / image_height * slide_height
-ppt_w = px_w / image_width * slide_width
-ppt_h = px_h / image_height * slide_height
+x = px_x / image_width
+y = px_y / image_height
+w = px_w / image_width
+h = px_h / image_height
 ```
 
-推荐 16:9 PPT 尺寸：
+脚本内部会把归一化坐标映射到 PPT 坐标：
 
 ```python
-from pptx.util import Inches
-prs.slide_width = Inches(13.333333)
-prs.slide_height = Inches(7.5)
+ppt_x = x * slide_width
+ppt_y = y * slide_height
+ppt_w = w * slide_width
+ppt_h = h * slide_height
 ```
 
-若输入图片不是 16:9，应按原图比例设置页面，或在保持完整画面前提下居中填充。
-
-### 6. 合并多个 PPTX
-
-当用户要求合并多个单页 PPTX：
-
-1. 按用户提供顺序排序。
-2. 逐页复制到底图和文字层。
-3. 确保页面尺寸一致。
-4. 输出单个合并后的 PPTX。
-
-如果页面尺寸不同，优先使用第一个文件的尺寸，并对后续页面等比例适配。
-
-### 7. 质检
+## 质检
 
 生成后必须检查：
 
@@ -168,94 +235,15 @@ prs.slide_height = Inches(7.5)
 - 有文字的页面应包含可编辑文本框。
 - 文本框内容非空。
 - 文本框数量与页面复杂度大致匹配。
-- 文件名清晰，例如：`image_slide_ocr_editable.pptx`。
 
-可以用 `python-pptx` 重新打开输出文件并统计：
+脚本生成后会输出类似统计：
 
-```python
-from pptx import Presentation
-prs = Presentation("output.pptx")
-for i, slide in enumerate(prs.slides, start=1):
-    text_shapes = [s for s in slide.shapes if hasattr(s, "text") and s.text.strip()]
-    pic_shapes = [s for s in slide.shapes if s.shape_type == 13]
-    print(i, len(pic_shapes), len(text_shapes))
-```
-
-## 实现模板
-
-```python
-from pathlib import Path
-from pptx import Presentation
-from pptx.util import Inches, Pt
-from pptx.dml.color import RGBColor
-from pptx.enum.text import PP_ALIGN
-from PIL import Image
-
-
-def hex_to_rgb(hex_color: str):
-    hex_color = hex_color.strip().lstrip("#")
-    return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
-
-
-def add_image_slide(prs, image_path, text_blocks):
-    img = Image.open(image_path)
-    img_w, img_h = img.size
-
-    slide = prs.slides.add_slide(prs.slide_layouts[6])
-    slide_w = prs.slide_width
-    slide_h = prs.slide_height
-
-    slide.shapes.add_picture(str(image_path), 0, 0, width=slide_w, height=slide_h)
-
-    for block in text_blocks:
-        text = block.get("text", "").strip()
-        if not text:
-            continue
-
-        x = block["x"] * slide_w
-        y = block["y"] * slide_h
-        w = block["w"] * slide_w
-        h = block["h"] * slide_h
-
-        textbox = slide.shapes.add_textbox(x, y, w, h)
-        textbox.fill.background()
-        textbox.line.fill.background()
-
-        tf = textbox.text_frame
-        tf.clear()
-        tf.word_wrap = True
-        p = tf.paragraphs[0]
-        p.text = text
-
-        align = block.get("align", "left")
-        p.alignment = {
-            "left": PP_ALIGN.LEFT,
-            "center": PP_ALIGN.CENTER,
-            "right": PP_ALIGN.RIGHT,
-        }.get(align, PP_ALIGN.LEFT)
-
-        run = p.runs[0]
-        run.font.size = Pt(block.get("font_size", 14))
-        run.font.bold = bool(block.get("bold", False))
-        run.font.name = block.get("font", "Microsoft YaHei")
-
-        color = block.get("color", "#000000")
-        r, g, b = hex_to_rgb(color)
-        run.font.color.rgb = RGBColor(r, g, b)
-
-
-def build_pptx(image_paths, ocr_pages, output_path):
-    first = Image.open(image_paths[0])
-    img_w, img_h = first.size
-
-    prs = Presentation()
-    prs.slide_width = Inches(13.333333)
-    prs.slide_height = Inches(13.333333 * img_h / img_w)
-
-    for image_path, text_blocks in zip(image_paths, ocr_pages):
-        add_image_slide(prs, image_path, text_blocks)
-
-    prs.save(output_path)
+```text
+Created: /path/to/image_slide_ocr_editable.pptx
+Pages: 3
+Page 1: pictures=1 textboxes=18
+Page 2: pictures=1 textboxes=24
+Page 3: pictures=1 textboxes=12
 ```
 
 ## 重要注意事项
