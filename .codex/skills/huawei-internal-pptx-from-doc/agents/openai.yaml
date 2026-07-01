@@ -1,0 +1,6 @@
+interface:
+  display_name: "Huawei Internal PPTX From Doc"
+  short_description: "从技术文档生成华为内部交流风格PPTX"
+  default_prompt: "Use $huawei-internal-pptx-from-doc to create a Huawei internal communication style PPTX from this document."
+policy:
+  allow_implicit_invocation: true
